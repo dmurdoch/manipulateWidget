@@ -160,7 +160,8 @@ combineWidgets <- function(..., list = NULL, nrow = NULL, ncol = NULL, title = N
 
   getDeps <- function(x) {
     if (!is.null(attr(x, "package")))
-      append(getDependency(class(x)[1], attr(x, "package")), x$dependencies)
+      append(tryCatch(getDependency(class(x)[1], attr(x, "package")),
+                      error = function(e) NULL), x$dependencies)
     else if (!is.null(attr(x, "html_dependencies")))
       attr(x, "html_dependencies")
     else if (is.list(x))
@@ -225,6 +226,9 @@ renderCombineWidgets <- function(expr, env = parent.frame(), quoted = FALSE) {
 
 # Private function used to prerender a combinedWidgets object
 preRenderCombinedWidgets <- function(x) {
+
+  hasCrosstalkInputs <- any(unlist(lapply(x$widgets, isCrosstalkInput)))
+
   widgets <- lapply(unname(x$widgets), function(w) {
     if (is.atomic(w)) return(structure(list(x = as.character(w)), class = "html"))
     if (is.null(w$preRenderHook)) {
@@ -318,7 +322,17 @@ preRenderCombinedWidgets <- function(x) {
   data <- lapply(widgets, function(w) w$x)
   widgetType <- sapply(widgets, function(w) class(w)[1])
 
-  x$x <- list(data = data, widgetType = widgetType, elementId = elementId, html = html);
+  x$x <- list(data = data, widgetType = widgetType, elementId = elementId, html = html,
+              hasCrosstalkInputs = hasCrosstalkInputs);
 
   x
+}
+
+# Check whether a widget is a crosstalk-package input, which will need special
+# initialization within combineWidgets()
+
+isCrosstalkInput <- function(w) {
+  inherits(w, "shiny.tag") &&
+    !is.null(w$attribs) &&
+    grepl("crosstalk-input", w$attribs$class)
 }
